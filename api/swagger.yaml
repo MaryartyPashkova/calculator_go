@@ -1,0 +1,56 @@
+openapi: 3.0.0
+info:
+  title: Calculator API
+  version: 1.0.0
+  description: Вычисляющий сервис с поддержкой calc и print команд
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /calculate:
+    post:
+      summary: Обработать инструкции
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: calc
+                  op:
+                    type: string
+                    example: "+"
+                  var:
+                    type: string
+                    example: x
+                  left:
+                    oneOf:
+                      - type: integer
+                      - type: string
+                  right:
+                    oneOf:
+                      - type: integer
+                      - type: string
+      responses:
+        "200":
+          description: Результаты вычислений
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        var:
+                          type: string
+                        value:
+                          type: integer
