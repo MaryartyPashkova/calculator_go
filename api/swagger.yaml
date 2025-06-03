@@ -1,16 +1,17 @@
 openapi: 3.0.0
 info:
   title: Calculator API
+  description: Сервис вычисления арифметических выражений с параллельной обработкой
   version: 1.0.0
-  description: Вычисляющий сервис с поддержкой calc и print команд
-
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8081
+    description: Локальный сервер
 
 paths:
   /calculate:
     post:
-      summary: Обработать инструкции
+      summary: Обработать список инструкций
+      description: Принимает JSON-массив инструкций, возвращает результаты указанных переменных
       requestBody:
         required: true
         content:
@@ -18,39 +19,89 @@ paths:
             schema:
               type: array
               items:
-                type: object
-                properties:
-                  type:
-                    type: string
-                    example: calc
-                  op:
-                    type: string
-                    example: "+"
-                  var:
-                    type: string
-                    example: x
-                  left:
-                    oneOf:
-                      - type: integer
-                      - type: string
-                  right:
-                    oneOf:
-                      - type: integer
-                      - type: string
+                $ref: "#/components/schemas/Instruction"
       responses:
         "200":
-          description: Результаты вычислений
+          description: Результаты вычисления
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Response"
+        "400":
+          description: Ошибка в запросе
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  items:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        var:
-                          type: string
-                        value:
-                          type: integer
+                  error:
+                    type: string
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+components:
+  schemas:
+    Instruction:
+      type: object
+      properties:
+        type:
+          type: string
+          example: calc
+          enum:
+            - calc
+            - print
+        op:
+          type: string
+          example: "+"
+          enum:
+            - "+"
+            - "-"
+            - "*"
+        var:
+          type: string
+          example: x
+        left:
+          oneOf:
+            - type: integer
+            - type: string
+          example: 1
+        right:
+          oneOf:
+            - type: integer
+            - type: string
+          example: 2
+      required:
+        - type
+        - var
+      required_when_type_calc:
+        - op
+        - left
+        - right
+
+    ResultItem:
+      type: object
+      properties:
+        var:
+          type: string
+        value:
+          type: integer
+      required:
+        - var
+        - value
+
+    Response:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResultItem"
+      required:
+        - items

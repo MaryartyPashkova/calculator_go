@@ -37,15 +37,18 @@ func NewCalculatorService() *CalculatorService {
 }
 
 func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction) ([]ResultItem, error) {
-	s.instructions = instructions
+	s.instructions = instructions // Сохраняем инструкции
+
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
 	resultChan := make(chan ResultItem, len(instructions))
 
 	tasks := make(map[string]func() (int64, error))
 	printVars := make([]string, 0)
+
+	// Шаг 1: построить все задачи
 	for _, instr := range instructions {
-		instr := instr
+		instr := instr // Создаем локальную копию инструкции
 		if instr.Type == "calc" {
 			name := instr.Var
 			// Проверяем, не была ли уже создана задача для этой переменной
@@ -57,6 +60,7 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 				log.Printf("Задача %s начата", name)
 				defer log.Printf("Задача %s завершена", name)
 
+				// Атомарно проверяем и устанавливаем флаг
 				s.mu.Lock()
 				if s.once[name] {
 					s.mu.Unlock()
@@ -65,7 +69,7 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 				s.once[name] = true
 				s.mu.Unlock()
 
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
 				lVal, err := s.resolveValue(tasks, instr.Left)
 				if err != nil {
@@ -103,6 +107,9 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 		}
 	}
 
+	// ... остальная часть метода без изменений
+
+	// Шаг 2: запустить задачи параллельно
 	for name, task := range tasks {
 		wg.Add(1)
 		go func(n string, t func() (int64, error)) {
@@ -119,11 +126,13 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 		}(name, task)
 	}
 
+	// Шаг 3: ждём завершения
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
 
+	// Шаг 4: собираем результаты
 	output := make([]ResultItem, 0)
 	for item := range resultChan {
 		output = append(output, item)
@@ -135,6 +144,7 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 	default:
 	}
 
+	// Шаг 5: фильтруем по printVars
 	finalOutput := make([]ResultItem, 0)
 	for _, varName := range printVars {
 		val, ok := s.results[varName]
@@ -146,9 +156,7 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 
 	return finalOutput, nil
 }
-
 func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error), val interface{}) (int64, error) {
-	log.Printf("Разрешаю значение: %+v", val)
 	switch v := val.(type) {
 	case float64:
 		if v != float64(int64(v)) {
@@ -159,26 +167,16 @@ func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error),
 		return v, nil
 	case string:
 		s.mu.Lock()
+		alreadyOnce := s.once[v]
 		existingVal, ok := s.results[v]
 		if ok {
 			s.mu.Unlock()
 			return existingVal, nil
 		}
 
-		// Если переменная уже в процессе вычисления, ждём её готовности
-		if s.once[v] {
+		if alreadyOnce {
 			s.mu.Unlock()
-			// Ждём пока переменная будет вычислена
-			for i := 0; i < 10; i++ {
-				s.mu.Lock()
-				if val, ok := s.results[v]; ok {
-					s.mu.Unlock()
-					return val, nil
-				}
-				s.mu.Unlock()
-				time.Sleep(50 * time.Millisecond)
-			}
-			return 0, fmt.Errorf("timeout waiting for variable %s", v)
+			return 0, fmt.Errorf("variable %s not ready and already assigned", v)
 		}
 
 		task, exists := tasks[v]
@@ -186,7 +184,8 @@ func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error),
 			s.mu.Unlock()
 			return 0, errors.New("undefined variable: " + v)
 		}
-		s.mu.Unlock()
+
+		s.mu.Unlock() // разблокируем, чтобы дать другим читать значения
 
 		val, err := task()
 		if err != nil {
@@ -197,47 +196,6 @@ func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error),
 		return 0, errors.New("invalid value type")
 	}
 }
-
-// func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error), val interface{}) (int64, error) {
-// 	switch v := val.(type) {
-// 	case float64:
-// 		if v != float64(int64(v)) {
-// 			return 0, fmt.Errorf("expected integer value, got %v", v)
-// 		}
-// 		return int64(v), nil
-// 	case int64:
-// 		return v, nil
-// 	case string:
-// 		s.mu.Lock()
-// 		alreadyOnce := s.once[v]
-// 		existingVal, ok := s.results[v]
-// 		if ok {
-// 			s.mu.Unlock()
-// 			return existingVal, nil
-// 		}
-
-// 		if alreadyOnce {
-// 			s.mu.Unlock()
-// 			return 0, fmt.Errorf("variable %s not ready and already assigned", v)
-// 		}
-
-// 		task, exists := tasks[v]
-// 		if !exists {
-// 			s.mu.Unlock()
-// 			return 0, errors.New("undefined variable: " + v)
-// 		}
-
-// 		s.mu.Unlock() // разблокируем, чтобы дать другим читать значения
-
-// 		val, err := task()
-// 		if err != nil {
-// 			return 0, err
-// 		}
-// 		return val, nil
-// 	default:
-// 		return 0, errors.New("invalid value type")
-// 	}
-// }
 
 // func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error), val interface{}) (int64, error) {
 // 	switch v := val.(type) {

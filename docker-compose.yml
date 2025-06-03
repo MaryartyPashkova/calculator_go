@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  calculator:
+    build: .
+    container_name: calculator
+    ports:
+      - "8081:8081"
+      - "50051:50051"
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    container_name: swagger-ui
+    ports:
+      - "8090:8080"
+    volumes:
+      - type: bind
+        source: ${PWD}/api
+        target: /usr/share/nginx/html/v1
+    environment:
+      SWAGGER_JSON: /usr/share/nginx/html/v1/swagger.yaml
+    command: ["nginx", "-g", "daemon off;"]

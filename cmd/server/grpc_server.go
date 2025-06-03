@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
 
 	"log"
 
@@ -82,5 +85,33 @@ func startGRPCServer() {
 	log.Printf("gRPC сервер запущен на порту %d\n", 50051)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
+	}
+}
+
+func calculateHandler(calculator *service.CalculatorService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type")
+
+		var instructions []service.Instruction
+		if err := json.NewDecoder(r.Body).Decode(&instructions); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			log.Printf("Ошибка парсинга: %v", err)
+			return
+		}
+
+		results, err := calculator.Run(context.Background(), instructions)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Execution error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		response := struct {
+			Items []service.ResultItem `json:"items"`
+		}{Items: results}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
 	}
 }
