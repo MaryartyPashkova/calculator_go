@@ -48,7 +48,7 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 		instr := instr
 		if instr.Type == "calc" {
 			name := instr.Var
-			// Проверяем, не была ли уже создана задача для этой переменной
+
 			if _, exists := tasks[name]; exists {
 				return nil, fmt.Errorf("duplicate assignment for variable %s", name)
 			}
@@ -148,16 +148,19 @@ func (s *CalculatorService) Run(ctx context.Context, instructions []Instruction)
 }
 
 func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error), val interface{}) (int64, error) {
-	log.Printf("Разрешаю значение: %+v", val)
+	log.Printf("Получено значение: %+v", val)
 	switch v := val.(type) {
 	case float64:
+		log.Printf("float64 значение: %+v", val)
 		if v != float64(int64(v)) {
 			return 0, fmt.Errorf("expected integer value, got %v", v)
 		}
 		return int64(v), nil
 	case int64:
+		log.Printf("int64 значение: %+v", val)
 		return v, nil
 	case string:
+		log.Printf("string значение: %+v", val)
 		s.mu.Lock()
 		existingVal, ok := s.results[v]
 		if ok {
@@ -165,10 +168,8 @@ func (s *CalculatorService) resolveValue(tasks map[string]func() (int64, error),
 			return existingVal, nil
 		}
 
-		// Если переменная уже в процессе вычисления, ждём её готовности
 		if s.once[v] {
 			s.mu.Unlock()
-			// Ждём пока переменная будет вычислена
 			for i := 0; i < 10; i++ {
 				s.mu.Lock()
 				if val, ok := s.results[v]; ok {

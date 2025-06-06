@@ -157,9 +157,9 @@ func TestCalculator_Run_ComplexGraph(t *testing.T) {
 	}
 
 	expected := map[string]int64{
-		"q": 40, // 12 * 5 = 60; 60 - 20 = 40
-		"z": -3, // 12 - 15 = -3
-		"x": 12, // 10 + 2 = 12
+		"q": 40,
+		"z": -3,
+		"x": 12,
 	}
 
 	if len(results) != len(expected) {
